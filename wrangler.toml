@@ -1,6 +1,7 @@
 name = "weekly-poll"
 main = "worker.js"
-compatibility_date = "2026-10-19"
+compatibility_date = "2026-10-18"
+keep_vars = true
 
 [triggers]
 crons = ["*/5 * * * *"]

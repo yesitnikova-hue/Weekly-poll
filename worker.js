@@ -1,11 +1,14 @@
-const API = (env, method, body) => fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
+const token = env => env.TELEGRAM_BOT_TOKEN || env.telegram_bot_token;
+const webhookSecret = env => env.TELEGRAM_WEBHOOK_SECRET || env.telegram_webhook_secret;
+const store = env => env.POLL_STATE || env.poll_state;
+const API = (env, method, body) => fetch(`https://api.telegram.org/bot${token(env)}/${method}`, {
   method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)
 }).then(async r => { const data = await r.json(); if (!data.ok) throw new Error('Telegram rejected request'); return data.result; });
 
-const owner = env => String(env.OWNER_TELEGRAM_ID);
+const owner = env => String(env.OWNER_TELEGRAM_ID || env.owner_telegram_id);
 const key = env => `owner:${owner(env)}`;
-const read = async env => (await env.POLL_STATE.get(key(env), 'json')) || {};
-const write = (env, value) => env.POLL_STATE.put(key(env), JSON.stringify(value));
+const read = async env => (await store(env).get(key(env), 'json')) || {};
+const write = (env, value) => store(env).put(key(env), JSON.stringify(value));
 const say = (env, text, reply_markup) => API(env, 'sendMessage', {chat_id: Number(owner(env)), text, ...(reply_markup && {reply_markup})});
 const buttons = rows => ({inline_keyboard: rows});
 const nonce = () => crypto.randomUUID().replaceAll('-', '');
@@ -59,7 +62,7 @@ async function handleCallback(env, callback) {
   if (action === 'publish') { draft.step = 'publishing'; await write(env, state); try { if (draft.conditions) await API(env, 'sendMessage', {chat_id: draft.target, text: `Условия голосования:\n${draft.conditions}`}); const result = await API(env, 'sendPoll', {chat_id: draft.target, question: draft.question, options: draft.options, is_anonymous: draft.anonymous, allows_multiple_answers: draft.multiple}); draft.step = 'published'; draft.message_id = result.message_id; await write(env, state); return say(env, '✅ Опрос опубликован. Следующий: /new'); } catch { draft.step = 'uncertain'; await write(env, state); return say(env, 'Публикация не подтверждена. Проверьте канал: условия могли отправиться отдельно. Автоповтора нет, чтобы избежать дублей.'); } }
 }
 
-async function ensureWebhook(env) { if (!env.WEBHOOK_URL) return; const info = await API(env, 'getWebhookInfo', {}); if (info.url !== env.WEBHOOK_URL) await API(env, 'setWebhook', {url: env.WEBHOOK_URL, secret_token: env.TELEGRAM_WEBHOOK_SECRET, allowed_updates: ['message', 'callback_query'], drop_pending_updates: false}); }
+async function ensureWebhook(env) { const url = env.WEBHOOK_URL || env.webhook_url; if (!url) return; const info = await API(env, 'getWebhookInfo', {}); if (info.url !== url) await API(env, 'setWebhook', {url, secret_token: webhookSecret(env), allowed_updates: ['message', 'callback_query'], drop_pending_updates: false}); }
 async function reminder(env) { const state = await read(env); if (!state.reminders) return; const local = new Intl.DateTimeFormat('en-CA', {timeZone: env.TZ || 'Asia/Yekaterinburg', weekday: 'short', hour: '2-digit', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit'}).formatToParts(new Date()).reduce((a, x) => ({...a, [x.type]: x.value}), {}); const stamp = `${local.year}-${local.month}-${local.day}`; if (local.weekday === 'Mon' && Number(local.hour) >= 10 && state.reminded !== stamp) { state.reminded = stamp; await write(env, state); await say(env, 'Пора подготовить еженедельное голосование. /new\nБез вашего подтверждения ничего не публикуется.'); } }
 
-export default { async fetch(request, env) { const url = new URL(request.url); if (url.pathname === '/health') return new Response('ok'); if (url.pathname !== '/webhook' || request.method !== 'POST' || request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== env.TELEGRAM_WEBHOOK_SECRET) return new Response('Not found', {status: 404}); try { const update = await request.json(); if (update.message) await handleMessage(env, update.message); if (update.callback_query) await handleCallback(env, update.callback_query); return new Response('ok'); } catch { return new Response('error', {status: 500}); } }, async scheduled(_, env) { try { await ensureWebhook(env); await reminder(env); } catch {} } };
+export default { async fetch(request, env) { const url = new URL(request.url); if (url.pathname === '/health') return new Response('ok'); if (url.pathname !== '/webhook' || request.method !== 'POST' || request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== webhookSecret(env)) return new Response('Not found', {status: 404}); try { const update = await request.json(); if (update.message) await handleMessage(env, update.message); if (update.callback_query) await handleCallback(env, update.callback_query); return new Response('ok'); } catch { return new Response('error', {status: 500}); } }, async scheduled(_, env) { try { await ensureWebhook(env); await reminder(env); } catch {} } };
