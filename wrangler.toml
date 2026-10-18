@@ -1,0 +1,10 @@
+name = "weekly-poll"
+main = "worker.js"
+compatibility_date = "2026-10-19"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[kv_namespaces]]
+binding = "POLL_STATE"
+id = "837ee7fea41a4a3cb7516f74385c95a3"
