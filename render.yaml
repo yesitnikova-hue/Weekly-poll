@@ -1,0 +1,23 @@
+services:
+  - type: worker
+    name: weekly-poll
+    runtime: docker
+    plan: starter
+    numInstances: 1
+    disk:
+      name: poll-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: OWNER_TELEGRAM_ID
+        sync: false
+      - key: TZ
+        value: Europe/Moscow
+      - key: DATABASE_PATH
+        value: /data/polls.sqlite3
+      - key: REMINDER_WEEKDAY
+        value: "0"
+      - key: REMINDER_HOUR
+        value: "10"

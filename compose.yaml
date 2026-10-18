@@ -1,0 +1,19 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?Set in protected environment}
+      OWNER_TELEGRAM_ID: ${OWNER_TELEGRAM_ID:?Set your numeric Telegram ID}
+      TZ: ${TZ:-Europe/Moscow}
+      DATABASE_PATH: /data/polls.sqlite3
+      REMINDER_WEEKDAY: ${REMINDER_WEEKDAY:-0}
+      REMINDER_HOUR: ${REMINDER_HOUR:-10}
+    volumes:
+      - poll-data:/data
+volumes:
+  poll-data:
